@@ -1,0 +1,262 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "AdminFrontApiDeployment": {
+            "DependsOn": [
+                "AdminFrontApiMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TfgAdminFrontApiGateway"
+                },
+                "StageName": "adminProd"
+            },
+            "Type": "AWS::ApiGateway::Deployment"
+        },
+        "AdminFrontApiMethod": {
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "Integration": {
+                    "Credentials": "arn:aws:iam::905418249319:role/LabRole",
+                    "IntegrationHttpMethod": "POST",
+                    "IntegrationResponses": [
+                        {
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent,x-amz-target'",
+                                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": {
+                            "Fn::Sub": [
+                                "{ \"input\": \"$util.escapeJavaScript($input.body)\", \"stateMachineArn\": \"${StateMachineArn}\" }",
+                                {
+                                    "StateMachineArn": {
+                                        "Ref": "TfgAdminStateMachine"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "Type": "AWS",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:states:action/StartExecution"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        },
+                        "StatusCode": 200
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "AdminFrontApiResource"
+                },
+                "RestApiId": {
+                    "Ref": "TfgAdminFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "AdminFrontApiResource": {
+            "Properties": {
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TfgAdminFrontApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "sendEmail",
+                "RestApiId": {
+                    "Ref": "TfgAdminFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        },
+        "SendEmailOptionsMethod": {
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "OPTIONS",
+                "Integration": {
+                    "IntegrationResponses": [
+                        {
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent,x-amz-target'",
+                                "method.response.header.Access-Control-Allow-Methods": "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            },
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    },
+                    "Type": "MOCK"
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        },
+                        "StatusCode": 200
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "AdminFrontApiResource"
+                },
+                "RestApiId": {
+                    "Ref": "TfgAdminFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "TfgAdminStateMachine": {
+            "Properties": {
+                "DefinitionString": {
+                    "Fn::Sub": [
+                        "{\"Comment\": \"A simple AWS Step Functions state machine that invokes two Lambda functions in sequence.\", \"StartAt\": \"RegisterEmailToTopicLambda\", \"States\": {\"RegisterEmailToTopicLambda\": {\"Type\": \"Task\", \"Resource\": \"${TfgRegisterEmailToTopicLambdaFunctionArn}\", \"Next\": \"SendEmailToTopicLambda\"}, \"SendEmailToTopicLambda\": {\"Type\": \"Task\", \"Resource\": \"${TfgSendEmailToTopicLambdaFunctionArn}\", \"End\": true}}}",
+                        {
+                            "TfgRegisterEmailToTopicLambdaFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "TfgRegisterEmailToTopicLambdaFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "TfgSendEmailToTopicLambdaFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "TfgSendEmailToTopicLambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "RoleArn": "arn:aws:iam::905418249319:role/LabRole",
+                "StateMachineName": "tfg-stf-admin-front"
+            },
+            "Type": "AWS::StepFunctions::StateMachine"
+        },
+        "TfgAdminFrontApiGateway": {
+            "Properties": {
+                "Description": "API Gateway to trigger Lambda function",
+                "Name": "tfg-apigw-admin-front"
+            },
+            "Type": "AWS::ApiGateway::RestApi"
+        },
+        "TfgSendEmailToTopicLambdaFunction": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-send-email-to-topic-lambda.zip"
+                },
+                "FunctionName": "tfg-send-email-to-topic-lambda",
+                "Handler": "index.handler",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Runtime": "nodejs18.x",
+                "Timeout": 900
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "TfgRegisterEmailToTopicLambdaFunction": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-register-email-to-topic-lambda.zip"
+                },
+                "FunctionName": "tfg-register-email-to-topic-lambda",
+                "Handler": "index.handler",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Runtime": "nodejs18.x",
+                "Timeout": 900,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TfgAdminDynamoDBTable"
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "TfgAdminDynamoDBTable": {
+            "Properties": {
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "Topic",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Subject",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Date",
+                        "AttributeType": "N"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "SubjectIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "Subject",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": "1",
+                            "WriteCapacityUnits": "1"
+                        }
+                    },
+                    {
+                        "IndexName": "DateIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "Date",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": "1",
+                            "WriteCapacityUnits": "1"
+                        }
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "Topic",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                },
+                "TableName": "tfg-ddb-admin-table"
+            },
+            "Type": "AWS::DynamoDB::Table"
+        }
+    }
+}

@@ -1,0 +1,313 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "CheckSubscriptionStack": {
+            "DependsOn": [
+                "TfgUsersDynamoDBTable"
+            ],
+            "Properties": {
+                "Parameters": {
+                    "TfgUsersDynamoDBTable": {
+                        "Ref": "TfgUsersDynamoDBTable"
+                    }
+                },
+                "TemplateURL": "https://s3.amazonaws.com/tfg-s3-cfn-templates/templates/Users/BaaS/CheckSubscription/tfg-cfn-check-subscription-template.json"
+            },
+            "Type": "AWS::CloudFormation::Stack"
+        },
+        "EmailOptionsMethod": {
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "OPTIONS",
+                "Integration": {
+                    "IntegrationResponses": [
+                        {
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent,x-amz-target'",
+                                "method.response.header.Access-Control-Allow-Methods": "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            },
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    },
+                    "Type": "MOCK"
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        },
+                        "StatusCode": 200
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "UserFrontApiResource"
+                },
+                "RestApiId": {
+                    "Ref": "TfgUserFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "TfgPoliticsSNSTopic": {
+            "Properties": {
+                "DisplayName": "Politics SNS Topic for Notifications",
+                "TopicName": "tfg-sns-politics-topic"
+            },
+            "Type": "AWS::SNS::Topic"
+        },
+        "TfgRegisterLambdaFunction": {
+            "DependsOn": [
+                "TfgUsersDynamoDBTable"
+            ],
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-register-lambda.zip"
+                },
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TfgUsersDynamoDBTable"
+                        }
+                    }
+                },
+                "FunctionName": "tfg-register-lambda",
+                "Handler": "index.handler",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Runtime": "nodejs18.x",
+                "Timeout": 900
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "TfgScienceSNSTopic": {
+            "Properties": {
+                "DisplayName": "Science SNS Topic for Notifications",
+                "TopicName": "tfg-sns-science-topic"
+            },
+            "Type": "AWS::SNS::Topic"
+        },
+        "TfgSubscribeLambdaFunction": {
+            "DependsOn": [
+                "TfgScienceSNSTopic",
+                "TfgTechSNSTopic",
+                "TfgPoliticsSNSTopic",
+                "TfgUsersDynamoDBTable"
+            ],
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-subscribe-lambda.zip"
+                },
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TfgUsersDynamoDBTable"
+                        }
+                    }
+                },
+                "FunctionName": "tfg-subscribe-lambda",
+                "Handler": "index.handler",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Runtime": "nodejs18.x",
+                "Timeout": 900
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "TfgTechSNSTopic": {
+            "Properties": {
+                "DisplayName": "Tech SNS Topic for Notifications",
+                "TopicName": "tfg-sns-tech-topic"
+            },
+            "Type": "AWS::SNS::Topic"
+        },
+        "TfgUserFrontApiGateway": {
+            "Properties": {
+                "Description": "API Gateway to trigger Step Function",
+                "Name": "tfg-apigw-user-front"
+            },
+            "Type": "AWS::ApiGateway::RestApi"
+        },
+        "TfgUsersDynamoDBTable": {
+            "Properties": {
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "Email",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Status",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "SubscriptionDate",
+                        "AttributeType": "N"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "StatusIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "Status",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": "1",
+                            "WriteCapacityUnits": "1"
+                        }
+                    },
+                    {
+                        "IndexName": "SubscriptionDateIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "SubscriptionDate",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": "1",
+                            "WriteCapacityUnits": "1"
+                        }
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "Email",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                },
+                "TableName": "tfg-ddb-users-table"
+            },
+            "Type": "AWS::DynamoDB::Table"
+        },
+        "TfgUserStateMachine": {
+            "Properties": {
+                "DefinitionString": {
+                    "Fn::Sub": [
+                        "{\"Comment\": \"A simple AWS Step Functions state machine that invokes two Lambda functions in sequence.\", \"StartAt\": \"InvokeRegisterLambda\", \"States\": {\"InvokeRegisterLambda\": {\"Type\": \"Task\", \"Resource\": \"${TfgRegisterLambdaFunctionArn}\", \"Next\": \"InvokeSubscribeLambda\"}, \"InvokeSubscribeLambda\": {\"Type\": \"Task\", \"Resource\": \"${TfgSubscribeLambdaFunctionArn}\", \"End\": true}}}",
+                        {
+                            "TfgRegisterLambdaFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "TfgRegisterLambdaFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "TfgSubscribeLambdaFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "TfgSubscribeLambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "RoleArn": "arn:aws:iam::905418249319:role/LabRole",
+                "StateMachineName": "tfg-stf-user-front"
+            },
+            "Type": "AWS::StepFunctions::StateMachine"
+        },
+        "UserFrontApiDeployment": {
+            "DependsOn": [
+                "UserFrontApiMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TfgUserFrontApiGateway"
+                },
+                "StageName": "usersProd"
+            },
+            "Type": "AWS::ApiGateway::Deployment"
+        },
+        "UserFrontApiMethod": {
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "Integration": {
+                    "Credentials": "arn:aws:iam::905418249319:role/LabRole",
+                    "IntegrationHttpMethod": "POST",
+                    "IntegrationResponses": [
+                        {
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent,x-amz-target'",
+                                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": {
+                            "Fn::Sub": [
+                                "{ \"input\": \"$util.escapeJavaScript($input.body)\", \"stateMachineArn\": \"${StateMachineArn}\" }",
+                                {
+                                    "StateMachineArn": {
+                                        "Ref": "TfgUserStateMachine"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "Type": "AWS",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:states:action/StartExecution"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        },
+                        "StatusCode": 200
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "UserFrontApiResource"
+                },
+                "RestApiId": {
+                    "Ref": "TfgUserFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "UserFrontApiResource": {
+            "Properties": {
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TfgUserFrontApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "email",
+                "RestApiId": {
+                    "Ref": "TfgUserFrontApiGateway"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        }
+    }
+}

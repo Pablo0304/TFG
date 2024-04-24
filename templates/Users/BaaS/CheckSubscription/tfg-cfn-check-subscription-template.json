@@ -1,0 +1,68 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "TfgUsersDynamoDBTable": {
+            "Type": "String",
+            "Description": "The exported ARN name for the DynamoDB Stream."
+        }
+    },
+    "Resources": {
+        "TfgCheckSubscriptionRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": "tfg-check-subscription-rule",
+                "Description": "Trigger Lambda every day",
+                "ScheduleExpression": "cron(0 1 * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "TfgCheckSubscriptionLambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "CheckSubscriptionTargetFunction"
+                    }
+                ]
+            }
+        },
+        "PermissionForEventsToInvokeLambda": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "TfgCheckSubscriptionLambdaFunction"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "TfgCheckSubscriptionRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TfgCheckSubscriptionLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "FunctionName": "tfg-check-subscription-lambda",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-check-subscription-lambda.zip"
+                },
+                "Runtime": "nodejs18.x",
+                "Timeout": 900,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TfgUsersDynamoDBTable"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

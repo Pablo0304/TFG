@@ -1,0 +1,178 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Stack que incluye un repositorio de CodeCommit, un trigger, una función Lambda y un bucket S3.",
+    "Resources": {
+        "TfgAdminFrontCodeCommitRepository": {
+            "Type": "AWS::CodeCommit::Repository",
+            "Properties": {
+                "Code": {
+                    "BranchName": "master",
+                    "S3": {
+                        "Bucket": "tfg-s3-cfn-templates",
+                        "Key": "initialize-repositories/tfg-admin-repo.zip"
+                    }
+                },
+                "RepositoryName": "tfg-admin-repo",
+                "Triggers": [
+                    {
+                        "Name": "UploadTrigger",
+                        "DestinationArn": {
+                            "Fn::GetAtt": [
+                                "TfgUploadAdminCodeLambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Branches": [
+                            "master"
+                        ],
+                        "Events": [
+                            "updateReference"
+                        ]
+                    }
+                ]
+            },
+            "DependsOn": [
+                "TfgUploadAdminCodeLambdaFunction"
+            ]
+        },
+        "TfgUploadAdminCodeLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "FunctionName": "tfg-upload-admin-code-lambda",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-upload-admin-code-lambda.zip"
+                },
+                "Runtime": "nodejs18.x",
+                "Timeout": 900,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET": {
+                            "Ref": "TfgAdminFrontBucket"
+                        },
+                        "CLOUDFRONT_DISTRIBUTION_ID": {
+                            "Ref": "TfgAdminCloudFrontDistribution"
+                        }
+                    }
+                }
+            }
+        },
+        "TfgAdminFrontBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": "tfg-s3-admin-front"
+            }
+        },
+        "AdminFrontBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "TfgAdminFrontBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "GrantOAIToCloudFront",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "CanonicalUser": {
+                                    "Fn::GetAtt": [
+                                        "AdminCloudFrontOriginAccessIdentity",
+                                        "S3CanonicalUserId"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:s3:::",
+                                        {
+                                            "Ref": "TfgAdminFrontBucket"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "TfgAdminCloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "TfgAdminFrontBucket",
+                                    "DomainName"
+                                ]
+                            },
+                            "Id": "S3Origin",
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "origin-access-identity/cloudfront/",
+                                            {
+                                                "Ref": "AdminCloudFrontOriginAccessIdentity"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "Enabled": true,
+                    "DefaultRootObject": "index.html",
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "ForwardedValues": {
+                            "QueryString": false,
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        }
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    }
+                }
+            }
+        },
+        "AdminCloudFrontOriginAccessIdentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": "OAI for CloudFront to access S3 bucket"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "WebsiteURLOutput": {
+            "Description": "Static website URL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TfgAdminFrontBucket",
+                    "WebsiteURL"
+                ]
+            }
+        },
+        "CloudFrontDistributionIdOutput": {
+            "Description": "The ID of the CloudFront Distribution",
+            "Value": {
+                "Ref": "TfgAdminCloudFrontDistribution"
+            }
+        }
+    }
+}

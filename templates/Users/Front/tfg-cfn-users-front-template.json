@@ -1,0 +1,178 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Stack que incluye un repositorio de CodeCommit, un trigger, una función Lambda y un bucket S3.",
+    "Resources": {
+        "TfgUsersFrontCodeCommitRepository": {
+            "Type": "AWS::CodeCommit::Repository",
+            "Properties": {
+                "Code": {
+                    "BranchName": "master",
+                    "S3": {
+                        "Bucket": "tfg-s3-cfn-templates",
+                        "Key": "initialize-repositories/tfg-users-repo.zip"
+                    }
+                },
+                "RepositoryName": "tfg-users-repo",
+                "Triggers": [
+                    {
+                        "Name": "UploadTrigger",
+                        "DestinationArn": {
+                            "Fn::GetAtt": [
+                                "TfgUploadUsersCodeLambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Branches": [
+                            "master"
+                        ],
+                        "Events": [
+                            "updateReference"
+                        ]
+                    }
+                ]
+            },
+            "DependsOn": [
+                "TfgUploadUsersCodeLambdaFunction"
+            ]
+        },
+        "TfgUploadUsersCodeLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "FunctionName": "tfg-upload-users-code-lambda",
+                "Role": "arn:aws:iam::905418249319:role/LabRole",
+                "Code": {
+                    "S3Bucket": "tfg-s3-cfn-templates",
+                    "S3Key": "lambdas/tfg-upload-users-code-lambda.zip"
+                },
+                "Runtime": "nodejs18.x",
+                "Timeout": 900,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET": {
+                            "Ref": "TfgUsersFrontBucket"
+                        },
+                        "CLOUDFRONT_DISTRIBUTION_ID": {
+                            "Ref": "TfgUsersCloudFrontDistribution"
+                        }
+                    }
+                }
+            }
+        },
+        "TfgUsersFrontBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": "tfg-s3-users-front"
+            }
+        },
+        "UsersFrontBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "TfgUsersFrontBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "GrantOAIToCloudFront",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "CanonicalUser": {
+                                    "Fn::GetAtt": [
+                                        "UsersCloudFrontOriginAccessIdentity",
+                                        "S3CanonicalUserId"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:s3:::",
+                                        {
+                                            "Ref": "TfgUsersFrontBucket"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "TfgUsersCloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "TfgUsersFrontBucket",
+                                    "DomainName"
+                                ]
+                            },
+                            "Id": "S3Origin",
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "origin-access-identity/cloudfront/",
+                                            {
+                                                "Ref": "UsersCloudFrontOriginAccessIdentity"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "Enabled": true,
+                    "DefaultRootObject": "index.html",
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "ForwardedValues": {
+                            "QueryString": false,
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        }
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    }
+                }
+            }
+        },
+        "UsersCloudFrontOriginAccessIdentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": "OAI for CloudFront to access S3 bucket"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "WebsiteURLOutput": {
+            "Description": "Static website URL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TfgUsersFrontBucket",
+                    "WebsiteURL"
+                ]
+            }
+        },
+        "CloudFrontDistributionIdOutput": {
+            "Description": "The ID of the CloudFront Distribution",
+            "Value": {
+                "Ref": "TfgUsersCloudFrontDistribution"
+            }
+        }
+    }
+}

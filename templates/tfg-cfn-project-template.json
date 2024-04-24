@@ -1,0 +1,29 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "UsersFrontStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": "https://tfg-s3-cfn-templates.s3.amazonaws.com/templates/Users/Front/tfg-cfn-users-front-template.json"
+            }
+        },
+        "AdminFrontStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": "https://tfg-s3-cfn-templates.s3.amazonaws.com/templates/Admin/Front/tfg-cfn-admin-front-template.json"
+            }
+        },
+        "UsersBaaSStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": "https://tfg-s3-cfn-templates.s3.amazonaws.com/templates/Users/BaaS/tfg-cfn-users-baas-template.json"
+            }
+        },
+        "AdminBaaSStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": "https://tfg-s3-cfn-templates.s3.amazonaws.com/templates/Admin/BaaS/tfg-cfn-admin-baas-template.json"
+            }
+        }
+    }
+}
