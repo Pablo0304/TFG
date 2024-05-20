@@ -1,2 +1,2 @@
 # TFG
-An automation for managing message queues via email
+Serverless Architecture Orchestration for Managing Email Subscriptions in AWS
