@@ -3,7 +3,7 @@
     "Parameters": {
         "TfgUsersDynamoDBTable": {
             "Type": "String",
-            "Description": "The exported ARN name for the DynamoDB Stream."
+            "Description": "The exported ARN name for the DynamoDB table."
         }
     },
     "Resources": {
